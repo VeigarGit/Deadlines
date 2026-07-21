@@ -1,0 +1,19 @@
+# Dockerman Deadline System
+version: "3.8"
+
+services:
+  deadlines:
+    build: .
+    container_name: Dockerman-deadlines
+    ports:
+      - "8080:8000"
+    volumes:
+      - deadlines-data:/app/data
+    environment:
+      - PORT=8000
+      - DATA_DIR=/app/data
+    restart: unless-stopped
+
+volumes:
+  deadlines-data:
+    driver: local

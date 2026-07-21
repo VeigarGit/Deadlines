@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dockerman • Deadlines</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dock: {
+              950: '#0a0f1a',
+              900: '#0f172a',
+              800: '#1e293b',
+              700: '#334155',
+              accent: '#06b6d4',
+            }
+          },
+          animation: {
+            'pulse-urgent': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .bar-track {
+      height: 6px;
+      border-radius: 9999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 9999px;
+      transition: width 0.8s ease, background-color 0.5s ease;
+      box-shadow: 0 0 12px currentColor;
+    }
+    .card {
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    }
+    .overdue-glow {
+      box-shadow: 0 0 0 1px #ef4444, 0 0 20px rgba(239,68,68,0.25);
+    }
+    .finished-card {
+      opacity: 0.65;
+      filter: grayscale(0.4);
+    }
+  </style>
+</head>
+<body class="bg-dock-950 text-slate-100 min-h-screen">
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Filtros -->
+    <div class="flex gap-2 mb-6">
+      <button data-filter="active" class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium bg-cyan-600 text-white">Ativos</button>
+      <button data-filter="finished" class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium bg-slate-700 text-slate-300 hover:bg-slate-600">Finalizados</button>
+      <button data-filter="all" class="filter-btn px-4 py-1.5 rounded-full text-sm font-medium bg-slate-700 text-slate-300 hover:bg-slate-600">Todos</button>
+    </div>
+
+    <!-- Lista de deadlines (barras primeiro) -->
+    <div id="list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-10">
+      <!-- cards renderizados via JS -->
+    </div>
+
+    <div id="empty" class="hidden text-center py-20 text-slate-500 mb-10">
+      <div class="text-5xl mb-4">📭</div>
+      <p class="text-lg">Nenhum deadline cadastrado</p>
+      <p class="text-sm mt-1">Adicione o primeiro abaixo</p>
+    </div>
+
+    <!-- Form de novo deadline (depois das barras) -->
+    <section class="bg-dock-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+      <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+        <span class="text-cyan-400">+</span> Novo Deadline
+      </h2>
+      <form id="form-new" class="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div class="md:col-span-4">
+          <label class="block text-xs text-slate-400 mb-1">Título *</label>
+          <input type="text" id="new-title" required placeholder="Ex: Entregar relatório Q3"
+            class="w-full bg-dock-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500" />
+        </div>
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-400 mb-1">Descrição</label>
+          <input type="text" id="new-desc" placeholder="Opcional"
+            class="w-full bg-dock-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50" />
+        </div>
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-400 mb-1">Data e hora limite *</label>
+          <input type="datetime-local" id="new-due" required
+            class="w-full bg-dock-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50" />
+        </div>
+        <div class="md:col-span-2 flex items-end">
+          <button type="submit"
+            class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-medium py-2.5 rounded-lg transition flex items-center justify-center gap-2">
+            <span>Cadastrar</span>
+          </button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <!-- Modal de edição -->
+  <div id="modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-dock-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <h3 class="text-lg font-semibold mb-4">Editar Deadline</h3>
+      <form id="form-edit" class="space-y-4">
+        <input type="hidden" id="edit-id" />
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Título</label>
+          <input type="text" id="edit-title" required
+            class="w-full bg-dock-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Descrição</label>
+          <input type="text" id="edit-desc"
+            class="w-full bg-dock-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Nova data limite</label>
+          <input type="datetime-local" id="edit-due" required
+            class="w-full bg-dock-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50" />
+        </div>
+        <div class="flex gap-3 pt-2">
+          <button type="button" id="btn-cancel-edit"
+            class="flex-1 bg-slate-700 hover:bg-slate-600 py-2.5 rounded-lg text-sm font-medium">Cancelar</button>
+          <button type="submit"
+            class="flex-1 bg-cyan-600 hover:bg-cyan-500 py-2.5 rounded-lg text-sm font-medium">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ============ Estado ============
+    let deadlines = [];
+    let currentFilter = 'active';
+
+    // ============ API ============
+    const API = '/api/deadlines';
+
+    async function fetchDeadlines() {
+      const res = await fetch(API);
+      if (!res.ok) throw new Error('Falha ao carregar');
+      deadlines = await res.json();
+      render();
+    }
+
+    async function createDeadline(data) {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao criar');
+      }
+      return res.json();
+    }
+
+    async function updateDeadline(id, data) {
+      const res = await fetch(`${API}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao atualizar');
+      }
+      return res.json();
+    }
+
+    async function deleteDeadline(id) {
+      const res = await fetch(`${API}/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Erro ao excluir');
+      return res.json();
+    }
+
+    // ============ Tempo & Cores ============
+    function parseISO(iso) {
+      return new Date(iso);
+    }
+
+    function formatRemaining(ms) {
+      if (ms <= 0) return { text: 'ATRASADO', overdue: true };
+      const s = Math.floor(ms / 1000);
+      const days = Math.floor(s / 86400);
+      const hours = Math.floor((s % 86400) / 3600);
+      const mins = Math.floor((s % 3600) / 60);
+      const secs = s % 60;
+      let parts = [];
+      if (days > 0) parts.push(`${days}d`);
+      parts.push(`${String(hours).padStart(2,'0')}h`);
+      parts.push(`${String(mins).padStart(2,'0')}m`);
+      parts.push(`${String(secs).padStart(2,'0')}s`);
+      return { text: parts.join(' '), overdue: false };
+    }
+
+    function getUrgency(createdAt, dueAt, now) {
+      const created = parseISO(createdAt).getTime();
+      const due = parseISO(dueAt).getTime();
+      const total = due - created;
+      if (total <= 0) return { percent: 0, color: '#ef4444', label: 'Inválido' };
+
+      const remaining = due - now;
+      let percent = Math.max(0, Math.min(100, (remaining / total) * 100));
+
+      // Dias restantes (baseado em quantidade absoluta de dias)
+      const daysLeft = remaining / (1000 * 60 * 60 * 24);
+
+      let color, label;
+      if (remaining <= 0) {
+        color = '#ef4444';
+        label = 'Atrasado';
+        percent = 0;
+      } else if (daysLeft > 30) {
+        color = '#22c55e'; // verde
+        label = 'Tranquilo';
+      } else if (daysLeft > 15) {
+        color = '#eab308'; // amarelo
+        label = 'Atenção';
+      } else if (daysLeft > 7) {
+        color = '#f97316'; // laranja
+        label = 'Urgente';
+      } else {
+        color = '#ef4444'; // vermelho
+        label = 'Crítico';
+      }
+      return { percent, color, label };
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      const d = parseISO(iso);
+      return d.toLocaleString('pt-BR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    // ============ Render ============
+    function render() {
+      const list = document.getElementById('list');
+      const empty = document.getElementById('empty');
+      const now = Date.now();
+
+      let filtered = deadlines;
+      if (currentFilter === 'active') {
+        filtered = deadlines.filter(d => !d.finished_at);
+      } else if (currentFilter === 'finished') {
+        filtered = deadlines.filter(d => d.finished_at);
+      }
+
+      if (filtered.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+
+      list.innerHTML = filtered.map(d => {
+        const isFinished = !!d.finished_at;
+        const remaining = formatRemaining(parseISO(d.due_at).getTime() - now);
+        const urgency = isFinished
+          ? { percent: 100, color: '#64748b', label: 'Finalizado' }
+          : getUrgency(d.created_at, d.due_at, now);
+
+        const overdueClass = !isFinished && remaining.overdue ? 'overdue-glow' : '';
+        const finishedClass = isFinished ? 'finished-card' : '';
+        const pulse = !isFinished && urgency.percent < 10 && !remaining.overdue ? 'animate-pulse-urgent' : '';
+
+        return `
+          <div class="card bg-dock-900 border border-slate-800 rounded-lg p-3 ${overdueClass} ${finishedClass}" data-id="${d.id}">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5 mb-0.5">
+                  <h3 class="font-semibold text-sm truncate leading-tight">${escapeHtml(d.title)}</h3>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style="background:${urgency.color}22;color:${urgency.color}">
+                    ${urgency.label}
+                  </span>
+                </div>
+                ${d.description ? `<p class="text-xs text-slate-400 mb-1 truncate">${escapeHtml(d.description)}</p>` : ''}
+                <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500 mono">
+                  <span>📅 ${formatDate(d.due_at)}</span>
+                  ${isFinished ? `<span class="text-emerald-400">✓ ${formatDate(d.finished_at)}</span>` : ''}
+                </div>
+              </div>
+
+              <div class="text-right shrink-0">
+                ${isFinished
+                  ? `<div class="text-emerald-400 font-semibold text-xs">CONCLUÍDO</div>`
+                  : `<div class="mono text-base font-bold leading-none ${remaining.overdue ? 'text-red-400' : ''}" style="color:${remaining.overdue ? '' : urgency.color}">
+                       ${remaining.text}
+                     </div>`
+                }
+              </div>
+            </div>
+
+            <!-- Barra de urgência -->
+            <div class="mt-2">
+              <div class="flex justify-between text-[10px] text-slate-500 mb-0.5">
+                <span>Urgência</span>
+                <span class="mono">${urgency.percent.toFixed(0)}%</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill ${pulse}" style="width:${urgency.percent}%; background-color:${urgency.color}; color:${urgency.color}"></div>
+              </div>
+            </div>
+
+            <!-- Ações -->
+            <div class="mt-2 flex flex-wrap gap-1.5">
+              ${!isFinished ? `
+                <button onclick="markFinished(${d.id})" class="text-[10px] px-2 py-1 rounded-md bg-emerald-600/20 text-emerald-400 border border-emerald-600/40 hover:bg-emerald-600/30 transition">
+                  ✓ Finalizar
+                </button>
+                <button onclick="openEdit(${d.id})" class="text-[10px] px-2 py-1 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600 hover:bg-slate-700 transition">
+                  ✎ Editar
+                </button>
+              ` : `
+                <button onclick="reopen(${d.id})" class="text-[10px] px-2 py-1 rounded-md bg-cyan-600/20 text-cyan-400 border border-cyan-600/40 hover:bg-cyan-600/30 transition">
+                  ↺ Reabrir
+                </button>
+              `}
+              <button onclick="removeDeadline(${d.id})" class="text-[10px] px-2 py-1 rounded-md bg-red-600/10 text-red-400 border border-red-600/30 hover:bg-red-600/20 transition ml-auto">
+                🗑
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // ============ Ações ============
+    async function markFinished(id) {
+      try {
+        await updateDeadline(id, { finished: true });
+        await fetchDeadlines();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function reopen(id) {
+      try {
+        await updateDeadline(id, { finished: false });
+        await fetchDeadlines();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function removeDeadline(id) {
+      if (!confirm('Excluir este deadline permanentemente?')) return;
+      try {
+        await deleteDeadline(id);
+        await fetchDeadlines();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function openEdit(id) {
+      const d = deadlines.find(x => x.id === id);
+      if (!d) return;
+      document.getElementById('edit-id').value = id;
+      document.getElementById('edit-title').value = d.title;
+      document.getElementById('edit-desc').value = d.description || '';
+      // datetime-local precisa de formato local sem Z
+      const due = parseISO(d.due_at);
+      const local = new Date(due.getTime() - due.getTimezoneOffset() * 60000)
+        .toISOString().slice(0, 16);
+      document.getElementById('edit-due').value = local;
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    // ============ Eventos ============
+    document.getElementById('form-new').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('new-title').value.trim();
+      const description = document.getElementById('new-desc').value.trim();
+      const dueLocal = document.getElementById('new-due').value;
+      if (!title || !dueLocal) return;
+
+      // Converte datetime-local para ISO UTC
+      const due = new Date(dueLocal).toISOString();
+
+      try {
+        await createDeadline({ title, description, due_at: due });
+        document.getElementById('form-new').reset();
+        await fetchDeadlines();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    document.getElementById('form-edit').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = parseInt(document.getElementById('edit-id').value);
+      const title = document.getElementById('edit-title').value.trim();
+      const description = document.getElementById('edit-desc').value.trim();
+      const dueLocal = document.getElementById('edit-due').value;
+      const due = new Date(dueLocal).toISOString();
+
+      try {
+        await updateDeadline(id, { title, description, due_at: due });
+        document.getElementById('modal').classList.add('hidden');
+        await fetchDeadlines();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    document.getElementById('btn-cancel-edit').addEventListener('click', () => {
+      document.getElementById('modal').classList.add('hidden');
+    });
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentFilter = btn.dataset.filter;
+        document.querySelectorAll('.filter-btn').forEach(b => {
+          b.classList.remove('bg-cyan-600', 'text-white');
+          b.classList.add('bg-slate-700', 'text-slate-300');
+        });
+        btn.classList.remove('bg-slate-700', 'text-slate-300');
+        btn.classList.add('bg-cyan-600', 'text-white');
+        render();
+      });
+    });
+
+    // Continuous update (a cada 1s)
+    function tick() {
+      render(); // re-render para atualizar barras e tempos
+    }
+
+    // Init
+    fetchDeadlines().then(() => {
+      tick();
+      setInterval(tick, 1000);
+    }).catch(err => {
+      console.error(err);
+      document.getElementById('list').innerHTML = `<p class="text-red-400">Erro ao conectar com a API. Verifique se o servidor está rodando.</p>`;
+    });
+  </script>
+</body>
+</html>
