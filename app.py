@@ -266,11 +266,11 @@ def main():
     print("  Sistema de deadlines com contagem regressiva e urgência")
     print("=" * 60)
     print(f"  Banco: {DB_PATH}")
-    print(f"  Servindo em: http://0.0.0.0:{PORT}")
+    print(f"  Servindo em: https://192.168.1.80:{PORT}")
     print("  Pressione Ctrl+C para parar")
     print("=" * 60)
 
-    server = HTTPServer(("0.0.0.0", PORT), DeadlineHandler)
+    server = HTTPServer(("192.168.1.80", PORT), DeadlineHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
