@@ -6,11 +6,11 @@ services:
     build: .
     container_name: Dockerman-deadlines
     ports:
-      - "9991:8000"
+      - "9991:9999"
     volumes:
       - deadlines-data:/app/data
     environment:
-      - PORT=8000
+      - PORT=9999
       - DATA_DIR=/app/data
     restart: unless-stopped
 

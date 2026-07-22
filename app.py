@@ -14,7 +14,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 # Configurações
-PORT = int(os.environ.get("PORT", 8000))
+PORT = int(os.environ.get("PORT", 9999))
 DATA_DIR = Path(os.environ.get("DATA_DIR", "data"))
 DB_PATH = DATA_DIR / "deadlines.db"
 PUBLIC_DIR = Path(__file__).parent / "public"
