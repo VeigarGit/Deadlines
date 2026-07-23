@@ -270,7 +270,7 @@ def main():
     print("  Pressione Ctrl+C para parar")
     print("=" * 60)
 
-    server = HTTPServer(("192.168.1.80", PORT), DeadlineHandler)
+    server = HTTPServer(("", PORT), DeadlineHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
